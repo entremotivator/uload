@@ -1,2 +1,3 @@
 streamlit
 requests
+audio-recorder-streamlit>=0.0.8
