@@ -13,17 +13,19 @@ N8N_WEBHOOK_URL = "https://agentonline-u29564.vm.elestio.app/webhook-test/60bbcc
 # =========================
 # Get this from your Google Sheet URL: 
 # https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit
-GOOGLE_SHEETS_ID = "YOUR_SHEET_ID_HERE"
+GOOGLE_SHEETS_ID = "1ZE9Kia1MzSQAekwLOSTRC7ppQ1G5Cbj4vEVvHqa3-n4"
 
 # The name of the sheet tab (usually "Recordings")
 SHEET_NAME = "Recordings"
 
+# Sheet GID (tab identifier) - used for direct tab linking
+SHEET_GID = "1515801754"
+
 # Path to your service account JSON file
 SERVICE_ACCOUNT_FILE = "service_account.json"
 
-# Google Drive folder ID for audio storage (from n8n workflow)
-# You can leave this empty as it's primarily used in n8n
-DRIVE_FOLDER_ID = ""
+# Google Drive folder ID for audio storage
+DRIVE_FOLDER_ID = "1X-CBJpOTCQ_auQUyCTFmzb-WlAHXcNw6"
 
 # =========================
 # APP CONFIGURATION
