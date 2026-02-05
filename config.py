@@ -20,8 +20,7 @@ GOOGLE_SHEETS_ID = "1AbCDeFgHiJKLmNOPqrSTUvWxYz123456789"
 # The name of the sheet tab (usually "Recordings")
 SHEET_NAME = "Recordings"
 
-# Sheet GID (tab identifier) - used for direct tab linking
-SHEET_GID = "1515801754"
+
 
 # Path to your service account JSON file
 SERVICE_ACCOUNT_FILE = "service_account.json"
