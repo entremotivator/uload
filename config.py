@@ -20,7 +20,7 @@ GOOGLE_SHEETS_ID = SPREADSHEET_ID
 # Sheet tab name (must match exactly)
 # NOTE: Change this to match your actual sheet tab name (e.g., "Sheet1")
 # or create a tab named "Recordings" in your Google Sheet
-SHEET_NAME = "Sheet1"
+SHEET_NAME = "Recordings"
 # Use sheet name only (prevents 404 range errors)
 RANGE_NAME = SHEET_NAME
 # =========================
