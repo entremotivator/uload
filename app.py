@@ -1,10 +1,11 @@
 import streamlit as st
 import requests
 import base64
-from pathlib import Path
+from audio_recorder_streamlit import audio_recorder
+import io
 
 # Configuration
-N8N_WEBHOOK_URL = "https://your-n8n-instance.com/webhook/60bbcc46-60c2-484f-a51e-aa0067070f68"
+N8N_WEBHOOK_URL = "https://agentonline-u29564.vm.elestio.app/webhook-test/60bbcc46-60c2-484f-a51e-aa0067070f68"
 
 st.set_page_config(
     page_title="Audio Transcription App",
@@ -13,17 +14,19 @@ st.set_page_config(
 )
 
 st.title("🎙️ Audio Transcription")
-st.markdown("Upload an audio file to transcribe it using OpenAI Whisper")
+st.markdown("Upload or record an audio file to transcribe it using OpenAI Whisper")
 
 # Initialize session state
 if 'transcription' not in st.session_state:
     st.session_state.transcription = None
 if 'title' not in st.session_state:
     st.session_state.title = None
+if 'audio_source' not in st.session_state:
+    st.session_state.audio_source = None
 
 # Input section
 with st.container():
-    st.subheader("Upload Audio")
+    st.subheader("Audio Input")
     
     # Title input
     title = st.text_input(
@@ -32,37 +35,66 @@ with st.container():
         help="Give your audio recording a descriptive title"
     )
     
-    # Audio file uploader
-    audio_file = st.file_uploader(
-        "Choose an audio file",
-        type=['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm'],
-        help="Supported formats: MP3, MP4, MPEG, M4A, WAV, WebM"
+    # Choose between upload and record
+    audio_input_type = st.radio(
+        "Select audio input method:",
+        ["Upload File", "Record Audio"],
+        horizontal=True
     )
+    
+    audio_data = None
+    filename = None
+    
+    if audio_input_type == "Upload File":
+        # Audio file uploader
+        audio_file = st.file_uploader(
+            "Choose an audio file",
+            type=['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm'],
+            help="Supported formats: MP3, MP4, MPEG, M4A, WAV, WebM"
+        )
+        
+        if audio_file:
+            audio_data = audio_file.read()
+            filename = audio_file.name
+            st.audio(audio_data, format=f'audio/{audio_file.type.split("/")[1]}')
+    
+    else:  # Record Audio
+        st.markdown("Click the microphone to start/stop recording:")
+        audio_bytes = audio_recorder(
+            text="",
+            recording_color="#e74c3c",
+            neutral_color="#3498db",
+            icon_name="microphone",
+            icon_size="3x",
+        )
+        
+        if audio_bytes:
+            audio_data = audio_bytes
+            filename = "recorded_audio.wav"
+            st.audio(audio_bytes, format='audio/wav')
+            st.success("✅ Recording captured!")
     
     # Transcribe button
     transcribe_btn = st.button(
         "🎯 Transcribe Audio",
         type="primary",
-        disabled=not (audio_file and title),
+        disabled=not (audio_data and title),
         use_container_width=True
     )
 
 # Process transcription
-if transcribe_btn and audio_file and title:
+if transcribe_btn and audio_data and title:
     with st.spinner("🔄 Transcribing your audio file..."):
         try:
-            # Read the audio file
-            audio_bytes = audio_file.read()
-            
             # Encode audio file to base64
-            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
             
             # Prepare the payload
             payload = {
                 "title": title,
-                "filename": audio_file.name,
-                "data": audio_base64,
-                "mimeType": audio_file.type
+                "filename": filename,
+                "audioData": audio_base64,
+                "language": "en"  # You can make this configurable
             }
             
             # Send to n8n webhook
@@ -78,6 +110,7 @@ if transcribe_btn and audio_file and title:
                 result = response.json()
                 st.session_state.transcription = result.get('transcription', '')
                 st.session_state.title = result.get('title', title)
+                st.session_state.audio_source = audio_input_type
                 st.success("✅ Transcription completed successfully!")
             else:
                 st.error(f"❌ Error: {response.status_code} - {response.text}")
@@ -130,19 +163,38 @@ with st.expander("ℹ️ Setup Instructions"):
        - Import the workflow JSON into your n8n instance
        - Configure your OpenAI API credentials in the OpenAI Whisper node
        - Activate the workflow
-       - Copy the webhook URL
+       - The webhook URL is already configured: 
+         `https://agentonline-u29564.vm.elestio.app/webhook-test/60bbcc46-60c2-484f-a51e-aa0067070f68`
     
     2. **Streamlit Setup:**
-       - Update the `N8N_WEBHOOK_URL` variable at the top of this file
-       - Replace with your actual n8n webhook URL
-       - Install requirements: `pip install streamlit requests`
-       - Run: `streamlit run app.py`
+       - Install requirements: `pip install -r requirements.txt`
+       - Run: `streamlit run streamlit_app.py`
     
     3. **OpenAI API:**
        - You need an OpenAI API key with access to Whisper
        - Add it to your n8n credentials
     
-    ### Supported Audio Formats:
+    ### Audio Input Options:
+    
+    **Upload File:**
     - MP3, MP4, MPEG, MPGA, M4A, WAV, WebM
     - Maximum file size depends on your OpenAI plan
+    
+    **Record Audio:**
+    - Click the microphone icon to start recording
+    - Click again to stop recording
+    - Audio is captured as WAV format
+    - Perfect for quick voice notes and dictation
+    
+    ### Tips:
+    - Give your audio a descriptive title before transcribing
+    - For best results, use clear audio with minimal background noise
+    - Longer audio files may take more time to transcribe
+    - You can download the transcription as a text file
     """)
+
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #666;'>Powered by OpenAI Whisper & n8n</div>",
+    unsafe_allow_html=True
+)
