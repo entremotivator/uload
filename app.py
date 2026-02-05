@@ -4,10 +4,13 @@ import base64
 from audio_recorder_streamlit import audio_recorder
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 import pandas as pd
 from datetime import datetime
 import json
 import os
+import io
+import re
 import config  # Import our configuration
 
 # =========================
@@ -19,17 +22,34 @@ st.set_page_config(
     layout="wide",
 )
 
-# Custom CSS for colorful dashboard
+# Custom CSS for colorful dashboard with audio player
 st.markdown("""
 <style>
     /* Dashboard Cards */
     .metric-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 10px;
+        padding: 25px;
+        border-radius: 15px;
         color: white;
         text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        transition: transform 0.3s;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+    }
+    
+    .metric-card h1 {
+        font-size: 3em;
+        margin: 10px 0;
+        font-weight: bold;
+    }
+    
+    .metric-card p {
+        font-size: 1.1em;
+        opacity: 0.9;
     }
     
     .metric-card-blue {
@@ -48,30 +68,66 @@ st.markdown("""
         background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
     }
     
+    .metric-card-red {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    }
+    
+    .metric-card-yellow {
+        background: linear-gradient(135deg, #f7b733 0%, #fc4a1a 100%);
+    }
+    
     /* Recording Cards */
     .recording-card {
         background: white;
         border-left: 5px solid #667eea;
-        padding: 15px;
-        margin: 10px 0;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: transform 0.2s;
+        padding: 20px;
+        margin: 15px 0;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transition: all 0.3s;
     }
     
     .recording-card:hover {
-        transform: translateX(5px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        transform: translateX(8px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+        border-left-width: 8px;
+    }
+    
+    .recording-card h3 {
+        color: #667eea;
+        margin-top: 0;
+    }
+    
+    /* Audio Player Container */
+    .audio-player-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 15px;
+        margin: 20px 0;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+    
+    .audio-player-title {
+        color: white;
+        font-size: 1.5em;
+        font-weight: bold;
+        margin-bottom: 15px;
     }
     
     /* Category Badges */
     .category-badge {
         display: inline-block;
-        padding: 5px 15px;
-        border-radius: 20px;
+        padding: 8px 20px;
+        border-radius: 25px;
         font-weight: bold;
-        font-size: 0.9em;
+        font-size: 0.95em;
         margin: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        transition: transform 0.2s;
+    }
+    
+    .category-badge:hover {
+        transform: scale(1.05);
     }
     
     .badge-podcast {
@@ -94,6 +150,11 @@ st.markdown("""
         color: white;
     }
     
+    .badge-businessmeeting {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        color: white;
+    }
+    
     .badge-meeting {
         background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
         color: white;
@@ -113,42 +174,56 @@ st.markdown("""
     .dataframe th {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 12px;
+        padding: 15px;
         text-align: left;
         position: sticky;
         top: 0;
         z-index: 10;
+        font-weight: bold;
     }
     
     .dataframe td {
-        padding: 10px;
+        padding: 12px;
         border-bottom: 1px solid #eee;
     }
     
     .dataframe tr:hover {
-        background-color: #f5f5f5;
+        background-color: #f8f9ff;
     }
     
     /* Sidebar */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-        color: white;
     }
     
     [data-testid="stSidebar"] * {
         color: white !important;
     }
     
-    /* Buttons */
-    .stButton > button {
+    [data-testid="stSidebar"] .stRadio label {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 10px;
         border-radius: 8px;
-        font-weight: bold;
+        margin: 5px 0;
         transition: all 0.3s;
     }
     
+    [data-testid="stSidebar"] .stRadio label:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: translateX(5px);
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        border-radius: 10px;
+        font-weight: bold;
+        transition: all 0.3s;
+        border: none;
+    }
+    
     .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
     }
     
     /* Progress Bars */
@@ -158,15 +233,41 @@ st.markdown("""
     
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 10px;
     }
     
     .stTabs [data-baseweb="tab"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
+        border-radius: 10px 10px 0 0;
+        padding: 12px 24px;
         font-weight: bold;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+    
+    /* Info boxes */
+    .stAlert {
+        border-radius: 10px;
+        border-left-width: 5px;
+    }
+    
+    /* Section headers */
+    h1, h2, h3 {
+        color: #667eea;
+    }
+    
+    /* Audio element styling */
+    audio {
+        width: 100%;
+        border-radius: 10px;
+        outline: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -213,6 +314,85 @@ def get_google_services():
     
     # Otherwise try to load from file
     return get_google_services_from_file()
+
+# =========================
+# AUDIO PLAYBACK FUNCTIONS
+# =========================
+def extract_drive_file_id(drive_link):
+    """Extract file ID from various Google Drive URL formats"""
+    if not drive_link or not drive_link.strip():
+        return None
+    
+    # Pattern 1: /file/d/FILE_ID/view
+    match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', drive_link)
+    if match:
+        return match.group(1)
+    
+    # Pattern 2: id=FILE_ID
+    match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', drive_link)
+    if match:
+        return match.group(1)
+    
+    # Pattern 3: /open?id=FILE_ID
+    match = re.search(r'/open\?id=([a-zA-Z0-9_-]+)', drive_link)
+    if match:
+        return match.group(1)
+    
+    # Pattern 4: direct file ID (if just the ID is provided)
+    if re.match(r'^[a-zA-Z0-9_-]+$', drive_link.strip()):
+        return drive_link.strip()
+    
+    return None
+
+@st.cache_data(ttl=3600)
+def get_audio_from_drive(_drive_service, file_id):
+    """Download audio file from Google Drive and return as bytes"""
+    try:
+        request = _drive_service.files().get_media(fileId=file_id)
+        file_buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_buffer, request)
+        
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        
+        file_buffer.seek(0)
+        return file_buffer.read()
+    except Exception as e:
+        st.error(f"Error downloading audio from Drive: {e}")
+        return None
+
+def play_audio_inline(drive_link, drive_service, title="Audio Playback"):
+    """Display audio player inline for Google Drive audio file"""
+    if not drive_link or not drive_link.strip():
+        st.warning("⚠️ No audio link available")
+        return
+    
+    file_id = extract_drive_file_id(drive_link)
+    
+    if not file_id:
+        st.error("❌ Could not extract file ID from Drive link")
+        st.caption(f"Link: {drive_link}")
+        return
+    
+    with st.spinner("🎵 Loading audio from Drive..."):
+        audio_bytes = get_audio_from_drive(drive_service, file_id)
+    
+    if audio_bytes:
+        st.markdown(f"""
+        <div class="audio-player-container">
+            <div class="audio-player-title">🎧 {title}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.audio(audio_bytes, format='audio/wav')
+        
+        # Show audio info
+        size_mb = len(audio_bytes) / (1024 * 1024)
+        st.caption(f"📊 Audio size: {size_mb:.2f} MB")
+    else:
+        st.error("❌ Failed to load audio from Drive")
+        st.info("💡 Make sure the file is shared with the service account")
 
 # =========================
 # GOOGLE SHEETS FUNCTIONS (WITH CRUD)
@@ -270,10 +450,17 @@ def delete_sheet_row(sheets_service, row_number):
         return False
     
     try:
+        # Get sheet ID (assuming first sheet, ID = 0)
+        sheet_metadata = sheets_service.spreadsheets().get(
+            spreadsheetId=config.GOOGLE_SHEETS_ID
+        ).execute()
+        
+        sheet_id = sheet_metadata['sheets'][0]['properties']['sheetId']
+        
         request = {
             'deleteDimension': {
                 'range': {
-                    'sheetId': 0,  # Assumes first sheet
+                    'sheetId': sheet_id,
                     'dimension': 'ROWS',
                     'startIndex': row_number - 1,
                     'endIndex': row_number
@@ -329,7 +516,9 @@ def init_session_state():
         "response_data": None,
         "edit_mode": False,
         "edit_row": None,
-        "view_mode": "cards",  # cards or table
+        "view_mode": "cards",
+        "playing_audio": None,
+        "selected_recording": None,
     }
     
     for key, value in defaults.items():
@@ -354,7 +543,7 @@ def render_sidebar():
         # Page Navigation
         page = st.radio(
             "📍 Navigation",
-            ["📊 Dashboard", "🎙️ Record", "📚 Library", "📈 Analytics"],
+            ["📊 Dashboard", "🎙️ Record", "📚 Library", "🎵 Player", "📈 Analytics"],
             label_visibility="visible"
         )
         
@@ -362,6 +551,7 @@ def render_sidebar():
             "📊 Dashboard": "Dashboard",
             "🎙️ Record": "Record",
             "📚 Library": "Library",
+            "🎵 Player": "Player",
             "📈 Analytics": "Analytics"
         }
         st.session_state.page = page_map[page]
@@ -391,6 +581,7 @@ def render_google_auth_section():
             if 'google_credentials' in st.session_state:
                 del st.session_state.google_credentials
             st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()
     else:
         st.warning("⚠️ Not connected")
@@ -451,6 +642,14 @@ def render_quick_stats():
             st.metric("🎯 Today", today_count)
         except:
             pass
+    
+    # Latest recording
+    if not df.empty:
+        st.divider()
+        st.caption("🎵 Latest Recording")
+        latest = df.iloc[0]
+        st.caption(f"**{latest.get('Title', 'Untitled')[:25]}...**")
+        st.caption(f"📂 {latest.get('Category', 'N/A')}")
 
 # =========================
 # DASHBOARD PAGE
@@ -476,7 +675,7 @@ def render_dashboard_page():
     
     # Metrics Row
     st.subheader("📈 Key Metrics")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         st.markdown(f"""
@@ -523,9 +722,40 @@ def render_dashboard_page():
         except:
             st.metric("Today", "0")
     
+    with col5:
+        # Average words per recording
+        if 'Words' in df.columns:
+            try:
+                words = df['Words'].astype(str).str.replace(',', '').replace('', '0')
+                words = pd.to_numeric(words, errors='coerce').fillna(0)
+                avg_words = int(words.mean())
+                st.markdown(f"""
+                <div class="metric-card metric-card-red">
+                    <h1>{avg_words:,}</h1>
+                    <p>Avg Words</p>
+                </div>
+                """, unsafe_allow_html=True)
+            except:
+                pass
+    
+    with col6:
+        # This week's recordings
+        try:
+            from datetime import timedelta
+            week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+            week_count = df['Timestamp'].apply(lambda x: x >= week_ago if isinstance(x, str) else False).sum()
+            st.markdown(f"""
+            <div class="metric-card metric-card-yellow">
+                <h1>{week_count}</h1>
+                <p>This Week</p>
+            </div>
+            """, unsafe_allow_html=True)
+        except:
+            pass
+    
     st.divider()
     
-    # Category Distribution
+    # Category Distribution & Recent Activity
     col1, col2 = st.columns([1, 1])
     
     with col1:
@@ -544,21 +774,16 @@ def render_dashboard_page():
                 """, unsafe_allow_html=True)
     
     with col2:
-        if 'Duration' in df.columns:
-            st.subheader("⏱️ Duration Stats")
-            # Parse duration and show stats
-            try:
-                durations = df['Duration'].str.extract(r'(\d+):(\d+)', expand=True)
-                if not durations.empty:
-                    durations.columns = ['minutes', 'seconds']
-                    durations = durations.apply(pd.to_numeric, errors='coerce')
-                    total_minutes = durations['minutes'].sum() + durations['seconds'].sum() / 60
-                    avg_minutes = total_minutes / len(df)
-                    
-                    st.metric("Total Duration", f"{int(total_minutes)} min")
-                    st.metric("Average Duration", f"{int(avg_minutes)} min")
-            except:
-                st.info("Duration data not available")
+        st.subheader("🕐 Recent Recordings")
+        recent = df.head(5)
+        for idx, row in recent.iterrows():
+            with st.container():
+                st.markdown(f"""
+                <div style="background: #f8f9ff; padding: 10px; border-radius: 8px; margin: 5px 0; border-left: 3px solid #667eea;">
+                    <strong>🎙️ {row.get('Title', 'Untitled')[:40]}...</strong><br>
+                    <small>📅 {row.get('Timestamp', 'N/A')} | 📂 {row.get('Category', 'N/A')}</small>
+                </div>
+                """, unsafe_allow_html=True)
     
     st.divider()
     
@@ -566,10 +791,11 @@ def render_dashboard_page():
     st.subheader("📋 All Recordings")
     
     # View toggle
-    view_col1, view_col2, view_col3 = st.columns([1, 1, 4])
+    view_col1, view_col2, view_col3, view_col4 = st.columns([1, 1, 1, 3])
     with view_col1:
         if st.button("🔄 Refresh", use_container_width=True):
             st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()
     
     with view_col2:
@@ -579,14 +805,24 @@ def render_dashboard_page():
             label_visibility="collapsed"
         )
     
+    with view_col3:
+        csv = df.drop('Row', axis=1).to_csv(index=False)
+        st.download_button(
+            "📥 Export CSV",
+            csv,
+            "recordings.csv",
+            "text/csv",
+            use_container_width=True
+        )
+    
     # Display data
     if view_mode == "Table View":
-        render_data_table(df, sheets_service)
+        render_data_table(df, sheets_service, drive_service)
     else:
-        render_data_cards(df, sheets_service)
+        render_data_cards(df, sheets_service, drive_service)
 
-def render_data_table(df, sheets_service):
-    """Render data as an interactive table with edit/delete"""
+def render_data_table(df, sheets_service, drive_service):
+    """Render data as an interactive table with edit/delete/play"""
     
     # Make a copy for display
     display_df = df.drop('Row', axis=1) if 'Row' in df.columns else df
@@ -615,7 +851,7 @@ def render_data_table(df, sheets_service):
     
     with action_col1:
         selected_row = st.number_input(
-            "Row to Edit/Delete",
+            "Row to Act On",
             min_value=2,
             max_value=len(df) + 1,
             value=2,
@@ -623,29 +859,61 @@ def render_data_table(df, sheets_service):
         )
     
     with action_col2:
-        btn_col1, btn_col2, btn_col3 = st.columns(3)
+        btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
+        
         with btn_col1:
-            if st.button("✏️ Edit Row", use_container_width=True, type="primary"):
+            if st.button("🎵 Play Audio", use_container_width=True, type="primary"):
+                row_data = df[df['Row'] == selected_row]
+                if not row_data.empty:
+                    st.session_state.selected_recording = row_data.iloc[0].to_dict()
+                    st.rerun()
+        
+        with btn_col2:
+            if st.button("✏️ Edit Row", use_container_width=True):
                 st.session_state.edit_mode = True
                 st.session_state.edit_row = selected_row
                 st.rerun()
         
-        with btn_col2:
-            if st.button("🗑️ Delete Row", use_container_width=True, type="secondary"):
+        with btn_col3:
+            if st.button("🗑️ Delete Row", use_container_width=True):
                 if delete_sheet_row(sheets_service, selected_row):
                     st.success(f"✅ Deleted row {selected_row}")
                     st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()
         
-        with btn_col3:
-            csv = df.drop('Row', axis=1).to_csv(index=False)
-            st.download_button(
-                "📥 Export CSV",
-                csv,
-                "recordings.csv",
-                "text/csv",
-                use_container_width=True
-            )
+        with btn_col4:
+            row_data = df[df['Row'] == selected_row]
+            if not row_data.empty:
+                doc_link = row_data.iloc[0].get('Sheet Link', '')
+                if doc_link and doc_link.strip():
+                    st.link_button("📄 View Doc", doc_link, use_container_width=True)
+    
+    # Play audio inline if selected
+    if st.session_state.get('selected_recording'):
+        st.divider()
+        recording = st.session_state.selected_recording
+        st.subheader(f"🎵 Now Playing: {recording.get('Title', 'Untitled')}")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            play_audio_inline(recording.get('Drive Link', ''), drive_service, recording.get('Title', 'Audio'))
+        
+        with col2:
+            st.markdown(f"""
+            <div style="background: #f8f9ff; padding: 20px; border-radius: 10px;">
+                <h4>📋 Recording Info</h4>
+                <p><strong>Category:</strong> {recording.get('Category', 'N/A')}</p>
+                <p><strong>Date:</strong> {recording.get('Timestamp', 'N/A')}</p>
+                <p><strong>Words:</strong> {recording.get('Words', 'N/A')}</p>
+                <p><strong>Duration:</strong> {recording.get('Duration', 'N/A')}</p>
+                <p><strong>File:</strong> {recording.get('Filename', 'N/A')}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if st.button("❌ Close Player"):
+            st.session_state.selected_recording = None
+            st.rerun()
     
     # Edit form
     if st.session_state.get('edit_mode') and st.session_state.get('edit_row'):
@@ -705,6 +973,7 @@ def render_edit_form(df, sheets_service):
                 st.session_state.edit_mode = False
                 st.session_state.edit_row = None
                 st.cache_resource.clear()
+                st.cache_data.clear()
                 st.rerun()
         
         if cancelled:
@@ -712,33 +981,175 @@ def render_edit_form(df, sheets_service):
             st.session_state.edit_row = None
             st.rerun()
 
-def render_data_cards(df, sheets_service):
-    """Render data as colorful cards"""
+def render_data_cards(df, sheets_service, drive_service):
+    """Render data as colorful cards with inline playback"""
     for idx, row in df.iterrows():
+        category_class = f"badge-{row['Category'].lower().replace(' ', '')}"
+        
+        with st.expander(f"🎙️ {row['Title']}", expanded=False):
+            # Header
+            st.markdown(f"""
+            <span class="category-badge {category_class}">{row['Category']}</span>
+            """, unsafe_allow_html=True)
+            
+            # Info
+            col1, col2, col3, col4 = st.columns(4)
+            col1.write(f"**📅 Date:** {row['Timestamp']}")
+            col2.write(f"**📝 Words:** {row['Words']}")
+            col3.write(f"**⏱️ Duration:** {row['Duration']}")
+            col4.write(f"**📁 File:** {row['Filename']}")
+            
+            st.divider()
+            
+            # Audio player
+            if row.get('Drive Link') and row['Drive Link'].strip():
+                play_audio_inline(row['Drive Link'], drive_service, row['Title'])
+            
+            st.divider()
+            
+            # Action buttons
+            btn_col1, btn_col2, btn_col3 = st.columns(3)
+            
+            with btn_col1:
+                if row.get('Drive Link') and row['Drive Link'].strip():
+                    st.link_button("🔗 Open in Drive", row['Drive Link'], use_container_width=True)
+            
+            with btn_col2:
+                if row.get('Sheet Link') and row['Sheet Link'].strip():
+                    st.link_button("📄 View Doc", row['Sheet Link'], use_container_width=True)
+            
+            with btn_col3:
+                if st.button(f"🗑️ Delete", key=f"del_{row['Row']}", use_container_width=True):
+                    if delete_sheet_row(sheets_service, row['Row']):
+                        st.success(f"✅ Deleted!")
+                        st.cache_resource.clear()
+                        st.cache_data.clear()
+                        st.rerun()
+
+# =========================
+# PLAYER PAGE
+# =========================
+def render_player_page():
+    """Render dedicated audio player page"""
+    st.title("🎵 Audio Player")
+    st.markdown("Browse and play all your recordings in one place")
+    
+    sheets_service, drive_service = get_google_services()
+    
+    if not sheets_service:
+        st.error("❌ Google Sheets not configured.")
+        st.info("👈 Upload your service_account.json in the sidebar")
+        st.stop()
+    
+    df = read_sheets_data(sheets_service)
+    
+    if df.empty:
+        st.info("📭 No recordings yet")
+        return
+    
+    # Playlist section
+    st.subheader("📋 Playlist")
+    
+    # Filter controls
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        if 'Category' in df.columns:
+            category_filter = st.multiselect(
+                "Filter by Category",
+                options=['All'] + sorted(df['Category'].unique().tolist()),
+                default=['All']
+            )
+    
+    with col2:
+        search = st.text_input("🔍 Search titles", "")
+    
+    # Apply filters
+    filtered_df = df.copy()
+    if category_filter and 'All' not in category_filter:
+        filtered_df = filtered_df[filtered_df['Category'].isin(category_filter)]
+    
+    if search:
+        filtered_df = filtered_df[filtered_df['Title'].str.contains(search, case=False, na=False)]
+    
+    st.write(f"**{len(filtered_df)} recordings available**")
+    
+    st.divider()
+    
+    # Playlist with play buttons
+    for idx, row in filtered_df.iterrows():
         category_class = f"badge-{row['Category'].lower().replace(' ', '')}"
         
         col1, col2, col3 = st.columns([3, 1, 1])
         
         with col1:
             st.markdown(f"""
-            <div class="recording-card">
-                <h3>🎙️ {row['Title']}</h3>
-                <span class="category-badge {category_class}">{row['Category']}</span>
-                <p><strong>Date:</strong> {row['Timestamp']} | <strong>Words:</strong> {row['Words']} | <strong>Duration:</strong> {row['Duration']}</p>
-                <p><strong>File:</strong> {row['Filename']}</p>
+            <div style="background: #f8f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+                <h4 style="margin: 0;">🎙️ {row['Title']}</h4>
+                <span class="category-badge {category_class}" style="font-size: 0.8em;">{row['Category']}</span>
+                <p style="margin: 5px 0 0 0; color: #666;">
+                    📅 {row['Timestamp']} | 📝 {row['Words']} words | ⏱️ {row['Duration']}
+                </p>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
-            if row.get('Drive Link') and row['Drive Link'].strip():
-                st.link_button("🎵 Audio", row['Drive Link'], use_container_width=True)
+            if st.button(f"▶️ Play", key=f"play_{row['Row']}", use_container_width=True, type="primary"):
+                st.session_state.playing_audio = row.to_dict()
+                st.rerun()
         
         with col3:
             if row.get('Sheet Link') and row['Sheet Link'].strip():
-                st.link_button("📄 Doc", row['Sheet Link'], use_container_width=True)
+                st.link_button("📄 Doc", row['Sheet Link'], use_container_width=True, key=f"doc_{row['Row']}")
+    
+    # Now Playing section
+    if st.session_state.get('playing_audio'):
+        st.divider()
+        render_now_playing(drive_service)
+
+def render_now_playing(drive_service):
+    """Render now playing section"""
+    recording = st.session_state.playing_audio
+    
+    st.subheader("🎵 Now Playing")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown(f"""
+        <div class="audio-player-container">
+            <div class="audio-player-title">🎧 {recording.get('Title', 'Untitled')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        play_audio_inline(recording.get('Drive Link', ''), drive_service, recording.get('Title', 'Audio'))
+    
+    with col2:
+        category_class = f"badge-{recording.get('Category', 'Random').lower().replace(' ', '')}"
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 15px; color: white;">
+            <h3>📋 Details</h3>
+            <span class="category-badge {category_class}">{recording.get('Category', 'N/A')}</span>
+            <p><strong>📅 Date:</strong> {recording.get('Timestamp', 'N/A')}</p>
+            <p><strong>📝 Words:</strong> {recording.get('Words', 'N/A')}</p>
+            <p><strong>⏱️ Duration:</strong> {recording.get('Duration', 'N/A')}</p>
+            <p><strong>📁 File:</strong> {recording.get('Filename', 'N/A')}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        if recording.get('Sheet Link') and recording['Sheet Link'].strip():
+            st.link_button("📄 View Transcript", recording['Sheet Link'], use_container_width=True)
+        
+        if recording.get('Drive Link') and recording['Drive Link'].strip():
+            st.link_button("🔗 Open in Drive", recording['Drive Link'], use_container_width=True)
+        
+        if st.button("❌ Stop Playing", use_container_width=True):
+            st.session_state.playing_audio = None
+            st.rerun()
 
 # =========================
-# RECORD PAGE (SAME AS BEFORE)
+# RECORD PAGE
 # =========================
 def render_record_page():
     """Render the main recording interface"""
@@ -971,6 +1382,7 @@ def reset_session():
 def render_library_page():
     """Render the recording library with playback"""
     st.title("📚 Recording Library")
+    st.markdown("Browse, search, and manage all your recordings")
     
     sheets_service, drive_service = get_google_services()
     
@@ -979,24 +1391,25 @@ def render_library_page():
         st.info("👈 Please upload your service_account.json file in the sidebar to continue.")
         st.stop()
     
-    # Refresh Button
-    col1, col2, col3 = st.columns([1, 1, 4])
+    # Action buttons
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 3])
     with col1:
         if st.button("🔄 Refresh", use_container_width=True):
             st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()
     
     with col2:
-        if st.button("📥 Export CSV", use_container_width=True):
-            df = read_sheets_data(sheets_service)
-            csv = df.drop('Row', axis=1).to_csv(index=False)
-            st.download_button(
-                "Download CSV",
-                csv,
-                "recordings.csv",
-                "text/csv",
-                use_container_width=True
-            )
+        df = read_sheets_data(sheets_service)
+        csv = df.drop('Row', axis=1).to_csv(index=False) if not df.empty else ""
+        st.download_button(
+            "📥 Export CSV",
+            csv,
+            "recordings.csv",
+            "text/csv",
+            use_container_width=True,
+            disabled=df.empty
+        )
     
     df = read_sheets_data(sheets_service)
     
@@ -1005,7 +1418,7 @@ def render_library_page():
         return
 
     # Filters
-    st.subheader("🔍 Filters")
+    st.subheader("🔍 Filters & Search")
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -1027,7 +1440,7 @@ def render_library_page():
     with col3:
         sort_by = st.selectbox(
             "Sort by",
-            ["Newest First", "Oldest First", "Title A-Z", "Title Z-A"]
+            ["Newest First", "Oldest First", "Title A-Z", "Title Z-A", "Most Words"]
         )
 
     # Apply Filters
@@ -1050,6 +1463,13 @@ def render_library_page():
         filtered_df = filtered_df.sort_values('Title', ascending=True)
     elif sort_by == "Title Z-A":
         filtered_df = filtered_df.sort_values('Title', ascending=False)
+    elif sort_by == "Most Words":
+        try:
+            filtered_df['Words_Num'] = filtered_df['Words'].astype(str).str.replace(',', '').replace('', '0')
+            filtered_df['Words_Num'] = pd.to_numeric(filtered_df['Words_Num'], errors='coerce').fillna(0)
+            filtered_df = filtered_df.sort_values('Words_Num', ascending=False)
+        except:
+            pass
 
     # Results Summary
     st.write(f"**Showing {len(filtered_df)} of {len(df)} recordings**")
@@ -1058,13 +1478,13 @@ def render_library_page():
     st.divider()
     
     for idx, row in filtered_df.iterrows():
-        render_recording_card(row, sheets_service)
+        render_recording_card_library(row, sheets_service, drive_service)
 
-def render_recording_card(row, sheets_service):
-    """Render a single recording card with playback"""
+def render_recording_card_library(row, sheets_service, drive_service):
+    """Render a single recording card in library with all features"""
     category_class = f"badge-{row['Category'].lower().replace(' ', '')}"
     
-    with st.expander(f"🎙️ {row.get('Title', 'Untitled')}"):
+    with st.expander(f"🎙️ {row.get('Title', 'Untitled')}", expanded=False):
         # Header with category badge
         st.markdown(f"""
         <span class="category-badge {category_class}">{row.get('Category', 'N/A')}</span>
@@ -1079,33 +1499,45 @@ def render_recording_card(row, sheets_service):
         
         st.divider()
         
+        # Audio player inline
+        if row.get('Drive Link') and row['Drive Link'].strip():
+            play_audio_inline(row['Drive Link'], drive_service, row['Title'])
+            st.divider()
+        
         # Action Links
-        link_col1, link_col2, link_col3 = st.columns(3)
+        btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
         
         drive_link = row.get('Drive Link', '')
         doc_link = row.get('Sheet Link', '')
         
-        if drive_link and drive_link.strip():
-            with link_col1:
+        with btn_col1:
+            if drive_link and drive_link.strip():
                 st.link_button(
-                    "🎵 Open Audio",
+                    "🔗 Open in Drive",
                     drive_link,
                     use_container_width=True
                 )
         
-        if doc_link and doc_link.strip():
-            with link_col2:
+        with btn_col2:
+            if doc_link and doc_link.strip():
                 st.link_button(
                     "📄 View Transcript",
                     doc_link,
                     use_container_width=True
                 )
         
-        with link_col3:
-            if st.button(f"🗑️ Delete", key=f"del_{row['Row']}", use_container_width=True):
+        with btn_col3:
+            if st.button(f"✏️ Edit", key=f"edit_{row['Row']}", use_container_width=True):
+                st.session_state.edit_mode = True
+                st.session_state.edit_row = row['Row']
+                st.rerun()
+        
+        with btn_col4:
+            if st.button(f"🗑️ Delete", key=f"del_{row['Row']}", use_container_width=True, type="secondary"):
                 if delete_sheet_row(sheets_service, row['Row']):
                     st.success(f"✅ Deleted!")
                     st.cache_resource.clear()
+                    st.cache_data.clear()
                     st.rerun()
 
 # =========================
@@ -1114,6 +1546,7 @@ def render_recording_card(row, sheets_service):
 def render_analytics_page():
     """Render analytics and insights"""
     st.title("📈 Analytics & Insights")
+    st.markdown("Deep dive into your recording data and trends")
     
     sheets_service, drive_service = get_google_services()
     
@@ -1129,6 +1562,48 @@ def render_analytics_page():
         st.info("📭 No data yet for analytics")
         return
     
+    # Summary metrics
+    st.subheader("📊 Summary Statistics")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("Total Recordings", len(df))
+    
+    with col2:
+        if 'Words' in df.columns:
+            try:
+                total_words = df['Words'].astype(str).str.replace(',', '').replace('', '0')
+                total_words = pd.to_numeric(total_words, errors='coerce').fillna(0).sum()
+                st.metric("Total Words", f"{int(total_words):,}")
+            except:
+                st.metric("Total Words", "N/A")
+    
+    with col3:
+        if 'Words' in df.columns:
+            try:
+                words = df['Words'].astype(str).str.replace(',', '').replace('', '0')
+                words = pd.to_numeric(words, errors='coerce').fillna(0)
+                avg_words = int(words.mean())
+                st.metric("Avg Words", f"{avg_words:,}")
+            except:
+                pass
+    
+    with col4:
+        if 'Category' in df.columns:
+            most_common = df['Category'].value_counts().idxmax()
+            st.metric("Most Common", most_common)
+    
+    with col5:
+        try:
+            from datetime import timedelta
+            week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+            week_count = df['Timestamp'].apply(lambda x: x >= week_ago if isinstance(x, str) else False).sum()
+            st.metric("This Week", week_count)
+        except:
+            pass
+    
+    st.divider()
+    
     # Time-based analysis
     st.subheader("📅 Timeline Analysis")
     
@@ -1137,7 +1612,7 @@ def render_analytics_page():
             df['Date'] = pd.to_datetime(df['Timestamp'], errors='coerce').dt.date
             daily_counts = df.groupby('Date').size().reset_index(name='Count')
             
-            st.line_chart(daily_counts.set_index('Date'))
+            st.line_chart(daily_counts.set_index('Date'), height=300)
         except:
             st.info("Timeline data not available")
     
@@ -1150,15 +1625,15 @@ def render_analytics_page():
         st.subheader("📊 Category Breakdown")
         if 'Category' in df.columns:
             category_data = df['Category'].value_counts()
-            st.bar_chart(category_data)
+            st.bar_chart(category_data, height=400)
     
     with col2:
-        st.subheader("📈 Word Count Distribution")
+        st.subheader("📈 Word Count by Recording")
         if 'Words' in df.columns:
             try:
                 words = df['Words'].astype(str).str.replace(',', '').replace('', '0')
                 words = pd.to_numeric(words, errors='coerce').fillna(0)
-                st.bar_chart(words)
+                st.bar_chart(words, height=400)
             except:
                 st.info("Word count data not available")
     
@@ -1171,10 +1646,41 @@ def render_analytics_page():
             df_sorted = df.copy()
             df_sorted['Words_Num'] = df_sorted['Words'].astype(str).str.replace(',', '').replace('', '0')
             df_sorted['Words_Num'] = pd.to_numeric(df_sorted['Words_Num'], errors='coerce').fillna(0)
-            top_10 = df_sorted.nlargest(10, 'Words_Num')[['Title', 'Category', 'Words', 'Duration']]
-            st.dataframe(top_10, use_container_width=True, hide_index=True)
+            top_10 = df_sorted.nlargest(10, 'Words_Num')[['Title', 'Category', 'Words', 'Duration', 'Timestamp']]
+            
+            st.dataframe(
+                top_10,
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
         except:
             st.info("Unable to calculate top recordings")
+    
+    st.divider()
+    
+    # Category insights
+    st.subheader("📂 Category Insights")
+    if 'Category' in df.columns and 'Words' in df.columns:
+        try:
+            df_analysis = df.copy()
+            df_analysis['Words_Num'] = df_analysis['Words'].astype(str).str.replace(',', '').replace('', '0')
+            df_analysis['Words_Num'] = pd.to_numeric(df_analysis['Words_Num'], errors='coerce').fillna(0)
+            
+            category_stats = df_analysis.groupby('Category').agg({
+                'Title': 'count',
+                'Words_Num': ['sum', 'mean']
+            }).round(0)
+            
+            category_stats.columns = ['Count', 'Total Words', 'Avg Words']
+            
+            st.dataframe(
+                category_stats,
+                use_container_width=True,
+                height=300
+            )
+        except:
+            st.info("Category insights not available")
 
 # =========================
 # FOOTER
@@ -1182,9 +1688,13 @@ def render_analytics_page():
 def render_footer():
     """Render page footer"""
     st.divider()
-    st.caption(
-        "🎙️ Audio Transcription Hub | Powered by Whisper + n8n + Google Drive + Streamlit"
-    )
+    st.markdown("""
+    <div style="text-align: center; padding: 20px; color: #666;">
+        <p><strong>🎙️ Audio Transcription Hub</strong></p>
+        <p>Powered by Whisper • n8n • Google Drive • Streamlit</p>
+        <p style="font-size: 0.9em;">Built for long-form audio transcription and management</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # =========================
 # MAIN APP LOGIC
@@ -1199,6 +1709,8 @@ def main():
         render_record_page()
     elif st.session_state.page == "Library":
         render_library_page()
+    elif st.session_state.page == "Player":
+        render_player_page()
     elif st.session_state.page == "Analytics":
         render_analytics_page()
     
