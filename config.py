@@ -18,7 +18,9 @@ SPREADSHEET_ID = "1ZE9Kia1MzSQAekwLOSTRC7ppQ1G5Cbj4vEVvHqa3-n4"
 # 🔒 Backward compatibility (prevents AttributeError)
 GOOGLE_SHEETS_ID = SPREADSHEET_ID
 # Sheet tab name (must match exactly)
-SHEET_NAME = "Recordings"
+# NOTE: Change this to match your actual sheet tab name (e.g., "Sheet1")
+# or create a tab named "Recordings" in your Google Sheet
+SHEET_NAME = "Sheet1"
 # Use sheet name only (prevents 404 range errors)
 RANGE_NAME = SHEET_NAME
 # =========================
