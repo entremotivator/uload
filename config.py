@@ -6,76 +6,82 @@ Edit these values after setting up Google Cloud services
 # =========================
 # N8N CONFIGURATION
 # =========================
-N8N_WEBHOOK_URL = "https://agentonline-u29564.vm.elestio.app/webhook-test/60bbcc46-60c2-484f-a51e-aa0067070f68"
+N8N_WEBHOOK_URL = (
+    "https://agentonline-u29564.vm.elestio.app/webhook-test/"
+    "60bbcc46-60c2-484f-a51e-aa0067070f68"
+)
 
+# =========================
+# GOOGLE SHEETS CONFIGURATION
+# =========================
+# Spreadsheet ID from:
+# https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
 SPREADSHEET_ID = "1AbCDeFgHiJKLmNOPqrSTUvWxYz123456789"
-RANGE_NAME = "Recordings"  # no A2:H
-# =========================
-# GOOGLE CLOUD CONFIGURATION
-# =========================
-# Get this from your Google Sheet URL: 
-# https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit
-GOOGLE_SHEETS_ID = "1AbCDeFgHiJKLmNOPqrSTUvWxYz123456789"
 
-# The name of the sheet tab (usually "Recordings")
+# Sheet tab name (must match exactly)
 SHEET_NAME = "Recordings"
 
+# Use the sheet name only — avoids range 404 errors
+RANGE_NAME = SHEET_NAME
 
-
-# Path to your service account JSON file
+# =========================
+# GOOGLE CLOUD AUTH
+# =========================
+# Path to service account credentials
 SERVICE_ACCOUNT_FILE = "service_account.json"
 
-# Google Drive folder ID for audio storage
+# Google Drive folder ID for storing audio files
 DRIVE_FOLDER_ID = "1X-CBJpOTCQ_auQUyCTFmzb-WlAHXcNw6"
 
 # =========================
 # APP CONFIGURATION
 # =========================
-# Categories for audio recordings
 CATEGORIES = [
     "Podcast",
-    "Audio Book", 
+    "Audio Book",
     "Notes",
     "Class",
     "Business Meeting",
-    "Random"
+    "Random",
 ]
 
-# Default category
 DEFAULT_CATEGORY = "Notes"
 
-# Supported audio formats for upload
-SUPPORTED_AUDIO_FORMATS = ["wav", "mp3", "m4a", "mp4", "webm", "mpeg"]
-
-# Maximum file size warning (in MB)
-MAX_FILE_SIZE_WARNING = 100
-
-# =========================
-# GOOGLE SHEETS COLUMN MAPPING
-# =========================
-# If you modify your sheet structure, update these
-SHEET_COLUMNS = {
-    'timestamp': 'A',
-    'title': 'B',
-    'category': 'C',
-    'filename': 'D',
-    'duration': 'E',
-    'words': 'F',
-    'drive_link': 'G',
-    'sheet_link': 'H'
-}
-
-# Column headers (must match your Google Sheet)
-SHEET_HEADERS = [
-    'Timestamp',
-    'Title', 
-    'Category',
-    'Filename',
-    'Duration',
-    'Words',
-    'Drive Link',
-    'Sheet Link'
+SUPPORTED_AUDIO_FORMATS = [
+    "wav",
+    "mp3",
+    "m4a",
+    "mp4",
+    "webm",
+    "mpeg",
 ]
+
+MAX_FILE_SIZE_WARNING = 100  # MB
+
+# =========================
+# GOOGLE SHEETS STRUCTURE
+# =========================
+SHEET_HEADERS = [
+    "Timestamp",
+    "Title",
+    "Category",
+    "Filename",
+    "Duration",
+    "Words",
+    "Drive Link",
+    "Sheet Link",
+]
+
+SHEET_COLUMNS = {
+    "timestamp": "A",
+    "title": "B",
+    "category": "C",
+    "filename": "D",
+    "duration": "E",
+    "words": "F",
+    "drive_link": "G",
+    "sheet_link": "H",
+}
 
 # =========================
 # UI CONFIGURATION
@@ -83,10 +89,7 @@ SHEET_HEADERS = [
 PAGE_TITLE = "Audio Transcription Hub"
 PAGE_ICON = "🎙️"
 
-# Sidebar width
 SIDEBAR_WIDTH = 300
-
-# Transcript text area height
 TRANSCRIPT_HEIGHT = 400
 
 # =========================
@@ -100,17 +103,15 @@ ENABLE_SEARCH = True
 # =========================
 # ADVANCED SETTINGS
 # =========================
-# Request timeout (None = no timeout)
+# No client-side timeout for long audio
 REQUEST_TIMEOUT = None
 
 # Google API scopes
 GOOGLE_SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive.readonly'
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.file",  # REQUIRED for uploads
 ]
 
-# Cache duration for Google services (in seconds)
-CACHE_TTL = 300
-
-# Number of recordings to show per page in library
+CACHE_TTL = 300  # seconds
 RECORDINGS_PER_PAGE = 50
+
