@@ -89,12 +89,12 @@ if transcribe_btn and audio_data and title:
             # Encode audio file to base64
             audio_base64 = base64.b64encode(audio_data).decode('utf-8')
             
-            # Prepare the payload
+            # Prepare the payload - n8n webhook automatically wraps in body
             payload = {
                 "title": title,
                 "filename": filename,
                 "audioData": audio_base64,
-                "language": "en"  # You can make this configurable
+                "language": "en"
             }
             
             # Send to n8n webhook
@@ -114,13 +114,18 @@ if transcribe_btn and audio_data and title:
                 st.success("✅ Transcription completed successfully!")
             else:
                 st.error(f"❌ Error: {response.status_code} - {response.text}")
+                with st.expander("Show debug info"):
+                    st.json({"status_code": response.status_code, "response": response.text})
                 
         except requests.exceptions.Timeout:
             st.error("❌ Request timed out. The audio file might be too long.")
         except requests.exceptions.RequestException as e:
             st.error(f"❌ Connection error: {str(e)}")
+            st.info("💡 Make sure the n8n workflow is activated and the webhook URL is correct.")
         except Exception as e:
             st.error(f"❌ An error occurred: {str(e)}")
+            with st.expander("Show debug info"):
+                st.exception(e)
 
 # Display results
 if st.session_state.transcription:
