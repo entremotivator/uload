@@ -8,12 +8,14 @@ Edit these values after setting up Google Cloud services
 # =========================
 N8N_WEBHOOK_URL = "https://agentonline-u29564.vm.elestio.app/webhook-test/60bbcc46-60c2-484f-a51e-aa0067070f68"
 
+SPREADSHEET_ID = "1AbCDeFgHiJKLmNOPqrSTUvWxYz123456789"
+
 # =========================
 # GOOGLE CLOUD CONFIGURATION
 # =========================
 # Get this from your Google Sheet URL: 
 # https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit
-GOOGLE_SHEETS_ID = "1ZE9Kia1MzSQAekwLOSTRC7ppQ1G5Cbj4vEVvHqa3-n4"
+GOOGLE_SHEETS_ID = "1AbCDeFgHiJKLmNOPqrSTUvWxYz123456789"
 
 # The name of the sheet tab (usually "Recordings")
 SHEET_NAME = "Recordings"
