@@ -18,19 +18,21 @@ N8N_WEBHOOK_URL = (
 # https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
 SPREADSHEET_ID = "1AbCDeFgHiJKLmNOPqrSTUvWxYz123456789"
 
+# 🔒 Backward compatibility (prevents AttributeError)
+GOOGLE_SHEETS_ID = SPREADSHEET_ID
+
 # Sheet tab name (must match exactly)
 SHEET_NAME = "Recordings"
 
-# Use the sheet name only — avoids range 404 errors
+# Use sheet name only (prevents 404 range errors)
 RANGE_NAME = SHEET_NAME
 
 # =========================
 # GOOGLE CLOUD AUTH
 # =========================
-# Path to service account credentials
 SERVICE_ACCOUNT_FILE = "service_account.json"
 
-# Google Drive folder ID for storing audio files
+# Google Drive folder ID for audio storage
 DRIVE_FOLDER_ID = "1X-CBJpOTCQ_auQUyCTFmzb-WlAHXcNw6"
 
 # =========================
@@ -103,15 +105,12 @@ ENABLE_SEARCH = True
 # =========================
 # ADVANCED SETTINGS
 # =========================
-# No client-side timeout for long audio
-REQUEST_TIMEOUT = None
+REQUEST_TIMEOUT = None  # No timeout for long audio
 
-# Google API scopes
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive.file",  # REQUIRED for uploads
+    "https://www.googleapis.com/auth/drive.file",
 ]
 
-CACHE_TTL = 300  # seconds
+CACHE_TTL = 300
 RECORDINGS_PER_PAGE = 50
-
