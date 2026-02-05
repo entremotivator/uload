@@ -9,7 +9,7 @@ Edit these values after setting up Google Cloud services
 N8N_WEBHOOK_URL = "https://agentonline-u29564.vm.elestio.app/webhook-test/60bbcc46-60c2-484f-a51e-aa0067070f68"
 
 SPREADSHEET_ID = "1AbCDeFgHiJKLmNOPqrSTUvWxYz123456789"
-
+RANGE_NAME = "Recordings"  # no A2:H
 # =========================
 # GOOGLE CLOUD CONFIGURATION
 # =========================
